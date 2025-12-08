@@ -5,42 +5,67 @@ import { AssetTypeCard } from "@/components/assets-card";
 
 // ---- TYPES ----
 export interface ScenarioAssetSaleDetails {
-  salePrice?: number; // optional to allow empty inputs
+  salePrice?: number;
   fees?: number;
   closeMonth?: string;
+  accumulatedDepreciation?: number;
 }
+
+export type ReplacementMethod =
+  | "BONUS"
+  | "SECTION_179"
+  | "MACRS_GDS"
+  | "MACRS_ADS";
 
 export interface ReplacementAsset {
-  id: string; // uuid
+  id: string;
   name: string;
   cost: number;
-  method: "BONUS" | "SECTION_179" | "MACRS_GDS" | "MACRS_ADS";
-  businessUse: number; // percentage 0–100
+  method: ReplacementMethod;
+  businessUse: number;
   inServiceMonth: string;
+  usefulLife?: number;
 }
 
-export interface TaxResultSummary {
-  totalAssetValue: number;
-  bonusDepreciation: number;
-  section179: number;
-  macrsDepreciation: number;
-  taxSavings: number;
+export interface ScenarioResultsFromBackend {
+  totalSaleProceeds: number;
+  totalTransactionFees: number;
+  totalSection1245Recapture: number;
+  totalSection1231Gain: number;
+  totalTaxOnSales: number;
+  netCashFromLiquidation: number;
+  totalReplacementCost: number;
+  totalBonusDepreciation: number;
+  totalSection179: number;
+  totalMacrsFirstYear: number;
+  totalFirstYearDeductions: number;
+  taxSavingsFromDeductions: number;
+  cashRequiredForReplacements: number;
   netCashFlow: number;
+  saleDetails: any[];
+  replacementDetails: any[];
+  calculatedAt: string;
+  taxYear: number;
+  warnings: string[];
 }
 
 export interface TaxSettings {
-  marginalRate: number; // decimal: e.g., 0.37
-  section179Limit: number; // e.g., 1220000
-  bonusPercent: number; // e.g., 100
+  marginalRate: number | "";
+  section179Limit: number | "";
+  bonusPercent: number | "";
+  capitalGainsRate: number;
 }
 
-// ---- CONTEXT ----
 interface ScenarioContextType {
   selectedAssets: AssetTypeCard[];
+  allAssets: AssetTypeCard[]; // NEW
+  setAllAssets: (assets: AssetTypeCard[]) => void; // NEW
+
   saleDetails: Record<number, ScenarioAssetSaleDetails>;
   replacementAssets: ReplacementAsset[];
-  computedResults: TaxResultSummary | null;
+  computedResults: ScenarioResultsFromBackend | null;
   taxSettings: TaxSettings;
+  loading: boolean;
 
   addSelectedAsset: (asset: AssetTypeCard) => void;
   removeSelectedAsset: (id: number) => void;
@@ -49,141 +74,167 @@ interface ScenarioContextType {
   addReplacementAsset: (asset: ReplacementAsset) => void;
   removeReplacementAsset: (id: string) => void;
 
-  computeScenario: () => void;
+  computeScenario: () => Promise<void>;
   setTaxSettings: (s: Partial<TaxSettings>) => void;
 }
 
 const ScenarioContext = createContext<ScenarioContextType | null>(null);
 
-// --------------------- PROVIDER ------------------------
+// ------------------------------------------------------------
+// PROVIDER
+// ------------------------------------------------------------
 
 export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
   const [selectedAssets, setSelectedAssets] = useState<AssetTypeCard[]>([]);
-  const [saleDetails, setSaleDetails] = useState<Record<number, ScenarioAssetSaleDetails>>({});
+
+  // NEW: Global cached assets so they don't reload on tab switch
+  const [allAssets, setAllAssets] = useState<AssetTypeCard[]>([]);
+
+  const [saleDetails, setSaleDetails] =
+    useState<Record<number, ScenarioAssetSaleDetails>>({});
+
   const [replacementAssets, setReplacementAssets] = useState<ReplacementAsset[]>([]);
-  const [computedResults, setComputedResults] = useState<TaxResultSummary | null>(null);
+
+  const [computedResults, setComputedResults] =
+    useState<ScenarioResultsFromBackend | null>(null);
 
   const [taxSettings, setTaxSettingsState] = useState<TaxSettings>({
-    marginalRate: 0.37,
-    section179Limit: 1220000,
-    bonusPercent: 100,
+    marginalRate: "",
+    section179Limit: "",
+    bonusPercent: "",
+    capitalGainsRate: 0.15,
   });
 
+  const [loading, setLoading] = useState(false);
+
+  // Reset results when inputs change
+  const clearResults = () => setComputedResults(null);
+
   const addSelectedAsset = (asset: AssetTypeCard) => {
-    setSelectedAssets((prev) => (prev.some((a) => a.id === asset.id) ? prev : [...prev, asset]));
+    setSelectedAssets(prev =>
+      prev.some(a => a.id === asset.id) ? prev : [...prev, asset]
+    );
+    clearResults();
   };
 
   const removeSelectedAsset = (id: number) => {
-    setSelectedAssets((prev) => prev.filter((a) => a.id !== id));
-    setSaleDetails((prev) => {
-      const copy = { ...prev };
-      delete copy[id];
-      return copy;
+    setSelectedAssets(prev => prev.filter(a => a.id !== id));
+    setSaleDetails(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
     });
+    clearResults();
   };
 
   const updateSaleDetails = (id: number, details: Partial<ScenarioAssetSaleDetails>) => {
-    setSaleDetails((prev) => ({
+    setSaleDetails(prev => ({
       ...prev,
       [id]: { ...prev[id], ...details },
     }));
+    clearResults();
   };
 
   const addReplacementAsset = (asset: ReplacementAsset) => {
-    setReplacementAssets((prev) => [...prev, asset]);
+    setReplacementAssets(prev => [...prev, asset]);
+    clearResults();
   };
 
   const removeReplacementAsset = (id: string) => {
-    setReplacementAssets((prev) => prev.filter((a) => a.id !== id));
+    setReplacementAssets(prev => prev.filter(a => a.id !== id));
+    clearResults();
   };
 
   const setTaxSettings = (s: Partial<TaxSettings>) => {
-    setTaxSettingsState((prev) => ({ ...prev, ...s }));
+    setTaxSettingsState(prev => ({ ...prev, ...s }));
+    clearResults();
   };
 
-  // ---------------- DETERMINISTIC ENGINE (Tier 2 - simplified IRS-like) ----------------
-  // Description / rules used:
-  // - Sale proceeds = sum(max(0, salePrice - fees))
-  // - Replacement deductions compute:
-  //    * Bonus (method = BONUS): apply full bonusPercent on business-use-adjusted cost
-  //    * Section 179 (method = SECTION_179): limited by section179Limit (per-scenario simplified)
-  //    * MACRS_GDS: simplified first-year rate: 20% (approx 5-year MACRS half-year convention)
-  //    * MACRS_ADS: simplified straight-line first-year = 1/5 = 20% (simpler stand-in)
-  // - Business use % scales deductions
-  // - Tax savings = marginalRate * (bonus + section179 + macrs)
-  // - Net cash flow = proceeds + taxSavings - totalReplacementCost
-  // This is intentionally simplified and documented for future replacement with a tax policy service.
+  // ------------------------------------------------------------
+  // CALL BACKEND FOR CALCULATION
+  // ------------------------------------------------------------
+  const computeScenario = async () => {
+    setLoading(true);
 
-  const computeScenario = () => {
-    let totalAssetValue = 0;
-    let bonusDepreciation = 0;
-    let section179 = 0;
-    let macrsDepreciation = 0;
+    try {
+      const api = process.env.NEXT_PUBLIC_API_URL;
 
-    // Sum liquidation proceeds (sale price minus fees)
-    for (const asset of selectedAssets) {
-      const sale = saleDetails[asset.id];
-      if (!sale || typeof sale.salePrice !== "number") continue;
-      const fees = sale.fees ?? 0;
-      totalAssetValue += Math.max(0, (sale.salePrice ?? 0) - fees);
-    }
+      const assetsToSell = selectedAssets.map(asset => {
+        const sale = saleDetails[asset.id] || {};
+        return {
+          assetId: asset.id,
+          assetName: asset.asset,
+          originalCost: asset.book_value,
+          accumulatedDepreciation: sale.accumulatedDepreciation || 0,
+          salePrice: sale.salePrice || 0,
+          transactionFees: sale.fees || 0,
+          closeMonth: sale.closeMonth || "",
+        };
+      });
 
-    // Replacement deductions
-    const { marginalRate, section179Limit, bonusPercent } = taxSettings;
-    let section179Remaining = section179Limit;
+      const replacementAssetsPayload = replacementAssets.map(r => ({
+        name: r.name,
+        cost: r.cost,
+        method: r.method,
+        businessUsePercent: r.businessUse,
+        inServiceMonth: r.inServiceMonth,
+        usefulLife: r.usefulLife || 5,
+      }));
 
-    let totalReplacementCost = 0;
+      const payload = {
+        userId: 1,
+        assetsToSell,
+        replacementAssets: replacementAssetsPayload,
+        marginalTaxRate: Number(taxSettings.marginalRate) || 0,
+        capitalGainsRate: taxSettings.capitalGainsRate,
+        businessIncomeLimit: null,
+        overrideSection179Limit: Number(taxSettings.section179Limit) || null,
+        overrideBonusPercent: Number(taxSettings.bonusPercent) || null,
+      };
 
-    for (const r of replacementAssets) {
-      const businessAdj = r.cost * (Math.max(0, Math.min(100, r.businessUse)) / 100);
-      totalReplacementCost += r.cost;
+      const res = await fetch(`${api}/scenarios/calculate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      if (r.method === "BONUS") {
-        // bonusPercent is like 100 for 100%
-        bonusDepreciation += businessAdj * (bonusPercent / 100);
-      } else if (r.method === "SECTION_179") {
-        // simplified single-scenario §179: assign up to cap
-        const take = Math.min(businessAdj, section179Remaining);
-        section179 += take;
-        section179Remaining -= take;
-      } else if (r.method === "MACRS_GDS") {
-        // simplified MACRS GDS: assume 5-year class first-year factor 20%
-        macrsDepreciation += businessAdj * 0.20;
-      } else if (r.method === "MACRS_ADS") {
-        // simplified ADS straight-line over 5 years -> first-year = 20%
-        macrsDepreciation += businessAdj * 0.20;
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail?.message || "Calculation failed");
       }
+
+      const results: ScenarioResultsFromBackend = await res.json();
+      setComputedResults(results);
+
+    } catch (error: any) {
+      console.error(error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
-
-    // Tax savings
-    const taxSavings = (bonusDepreciation + section179 + macrsDepreciation) * marginalRate;
-
-    // Net cash flow
-    const netCashFlow = totalAssetValue + taxSavings - totalReplacementCost;
-
-    setComputedResults({
-      totalAssetValue,
-      bonusDepreciation,
-      section179,
-      macrsDepreciation,
-      taxSavings,
-      netCashFlow,
-    });
   };
 
+  // ------------------------------------------------------------
   return (
     <ScenarioContext.Provider
       value={{
         selectedAssets,
+        allAssets,      // NEW
+        setAllAssets,   // NEW
+
         saleDetails,
         replacementAssets,
         computedResults,
         taxSettings,
+        loading,
+
         addSelectedAsset,
         removeSelectedAsset,
         updateSaleDetails,
+
         addReplacementAsset,
         removeReplacementAsset,
+
         computeScenario,
         setTaxSettings,
       }}
@@ -193,10 +244,12 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// ---------------- HOOK ----------------------
-
+// ------------------------------------------------------------
+// HOOK
+// ------------------------------------------------------------
 export const useScenario = () => {
   const ctx = useContext(ScenarioContext);
-  if (!ctx) throw new Error("useScenario must be used within a ScenarioProvider");
+  if (!ctx)
+    throw new Error("useScenario must be used within a ScenarioProvider");
   return ctx;
 };

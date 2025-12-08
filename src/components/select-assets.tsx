@@ -3,64 +3,78 @@
 import { useEffect, useState } from "react";
 import AssetsCard, { AssetTypeCard } from "./assets-card";
 import SelectAssetsModal from "./select-assets-modal";
+import CreateAssetModal from "./create-asset-modal";
 import { useScenario } from "@/context/ScenarioContext";
 
 const SelectAssets = () => {
   const { selectedAssets, addSelectedAsset, removeSelectedAsset } = useScenario();
 
-  const [allAssets, setAllAssets] = useState<AssetTypeCard[]>([]);
+  const { allAssets, setAllAssets } = useScenario();
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [showSelectModal, setShowSelectModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const loadAssets = async () => {
+    try {
+      const api = process.env.NEXT_PUBLIC_API_URL;
+
+      const res = await fetch(`${api}/GetAssets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: 1 }),
+      });
+
+      if (!res.ok) {
+        console.error("Failed to fetch assets:", await res.text());
+        setLoading(false);
+        return;
+      }
+
+      const data = await res.json();
+
+      const mapped: AssetTypeCard[] = data.map((asset: any) => {
+        const latestFMV =
+          asset.fairMarketValuesOverTime?.[
+            asset.fairMarketValuesOverTime.length - 1
+          ]?.value ?? 0;
+
+        return {
+          id: asset.AssetId,
+          category: asset.Type,
+          asset: `${asset.Manufacturer} ${asset.Model}`,
+          year: asset.ModelYear,
+          fair_market_value: latestFMV,
+          book_value: asset.BookValue,
+        };
+      });
+
+      setAllAssets(mapped);
+    } catch (err) {
+      console.error("Error loading assets:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function loadAssets() {
-      try {
-        const api = process.env.NEXT_PUBLIC_API_URL;
-
-        const res = await fetch(`${api}/GetAssets`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(1),
-        });
-
-        if (!res.ok) {
-          console.error("Failed to fetch assets:", await res.text());
-          setLoading(false);
-          return;
-        }
-
-        const data = await res.json();
-
-        const mapped: AssetTypeCard[] = data.map((asset: any) => {
-          const latestFMV =
-            asset.fairMarketValuesOverTime?.[
-              asset.fairMarketValuesOverTime.length - 1
-            ]?.value ?? 0;
-
-          return {
-            id: asset.assetId,
-            category: asset.type,
-            asset: `${asset.manufacturer} ${asset.model}`,
-            year: asset.modelYear,
-            fair_market_value: latestFMV,
-            book_value: asset.bookValue,
-          };
-        });
-
-        setAllAssets(mapped);
-      } catch (err) {
-        console.error("Error loading assets:", err);
-      } finally {
-        setLoading(false);
-      }
+    if (allAssets.length === 0) {
+      loadAssets();
+    } else {
+      setLoading(false);
     }
-
-    loadAssets();
   }, []);
 
   const handleSelectAsset = (asset: AssetTypeCard) => {
     addSelectedAsset(asset);
-    setShowModal(false);
+    setShowSelectModal(false);
+  };
+
+  const handleAssetCreated = async () => {
+    setShowCreateModal(false);
+    setLoading(true);
+    // Reload the assets list to include the newly created asset
+    await loadAssets();
   };
 
   return (
@@ -68,19 +82,61 @@ const SelectAssets = () => {
       <div className="flex flex-row items-center justify-between mb-8">
         <h2 className="scenario-heading">Select Assets to Liquidate</h2>
 
-        <button
-          onClick={() => setShowModal(true)}
-          className="bg-dpa-dark-green text-white font-semibold p-2 px-4 rounded-full hover:bg-green-800"
-        >
-          {selectedAssets.length === 0 ? "Add Asset" : "Add More"}
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShowDropdown(!showDropdown)}
+            className="bg-dpa-dark-green text-white font-semibold p-2 px-4 rounded-full hover:bg-green-800 flex items-center gap-2"
+          >
+            {selectedAssets.length === 0 ? "Add Asset" : "Add More"}
+            <span className="text-sm">▼</span>
+          </button>
+
+          {showDropdown && (
+            <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+              <button
+                onClick={() => {
+                  setShowSelectModal(true);
+                  setShowDropdown(false);
+                }}
+                className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded-t-lg"
+              >
+                <div className="font-semibold">Select Existing Asset</div>
+              </button>
+              <div className="border-t border-gray-200"></div>
+              <button
+                onClick={() => {
+                  setShowCreateModal(true);
+                  setShowDropdown(false);
+                }}
+                className="w-full text-left px-4 py-3 hover:bg-gray-100 rounded-b-lg"
+              >
+                <div className="font-semibold">Create New Asset</div>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {showModal && (
+      {/* Close dropdown when clicking outside */}
+      {showDropdown && (
+        <div
+          className="fixed inset-0 z-0"
+          onClick={() => setShowDropdown(false)}
+        />
+      )}
+
+      {showSelectModal && (
         <SelectAssetsModal
           allAssets={allAssets}
           onSelect={handleSelectAsset}
-          onClose={() => setShowModal(false)}
+          onClose={() => setShowSelectModal(false)}
+        />
+      )}
+
+      {showCreateModal && (
+        <CreateAssetModal
+          onSuccess={handleAssetCreated}
+          onClose={() => setShowCreateModal(false)}
         />
       )}
 
