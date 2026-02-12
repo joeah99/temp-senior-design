@@ -3,6 +3,8 @@
 import AddReplacement from "@/components/add-replacement";
 import ResultsTax from "@/components/results-tax";
 import SelectAssets from "@/components/select-assets";
+import Actions from "@/components/actions";
+import LoansPage from "@/components/loans/loans-page";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -11,7 +13,7 @@ import { useScenario } from "@/context/ScenarioContext";
 export const dynamic = "force-dynamic";
 
 export default function Scenarios() {
-  const steps = ["select-assets", "replacement-purchases", "results-tax", "actions"];
+  const steps = ["select-assets", "replacement-purchases", "loans", "results-tax", "actions"];
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -40,18 +42,16 @@ export default function Scenarios() {
 
   return (
     <>
-      <div className="flex-1 ml-64 bg-white p-8 transition-all duration-300">
+      <div className="flex-1 bg-white p-4 lg:p-8 transition-all duration-300">
         {currentStep === "select-assets" && <SelectAssets />}
 
         {currentStep === "replacement-purchases" && <AddReplacement />}
 
+        {currentStep === "loans" && <LoansPage />}
+
         {currentStep === "results-tax" && <ResultsTax />}
 
-        {currentStep === "actions" && (
-          <section id="actions">
-            <h2 className="text-3xl font-bold text-black mb-8">Actions</h2>
-          </section>
-        )}
+        {currentStep === "actions" && <Actions />}
       </div>
 
       <footer className="fixed bottom-0 right-0 h-16 flex flex-row gap-2 items-center justify-between px-6">

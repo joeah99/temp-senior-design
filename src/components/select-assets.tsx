@@ -5,24 +5,31 @@ import AssetsCard, { AssetTypeCard } from "./assets-card";
 import SelectAssetsModal from "./select-assets-modal";
 import CreateAssetModal from "./create-asset-modal";
 import { useScenario } from "@/context/ScenarioContext";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 const SelectAssets = () => {
-  const { selectedAssets, addSelectedAsset, removeSelectedAsset } = useScenario();
+  const { selectedAssets, addSelectedAsset, removeSelectedAsset, refreshSelectedAsset } = useScenario();
+  const { user } = useAuth();
 
   const { allAssets, setAllAssets } = useScenario();
   const [loading, setLoading] = useState(true);
   const [showSelectModal, setShowSelectModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [editingAsset, setEditingAsset] = useState<any>(null); // Asset to edit
+  const router = useRouter();
 
   const loadAssets = async () => {
+    if (!user) return;
+
     try {
       const api = process.env.NEXT_PUBLIC_API_URL;
 
       const res = await fetch(`${api}/GetAssets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: 1 }),
+        body: JSON.stringify({ user_id: user.user_id }),
       });
 
       if (!res.ok) {
@@ -46,35 +53,58 @@ const SelectAssets = () => {
           year: asset.ModelYear,
           fair_market_value: latestFMV,
           book_value: asset.BookValue,
+          purchase_price: asset.PurchasePrice,
+          originalData: asset, // Store full object for editing
         };
       });
 
       setAllAssets(mapped);
+      return mapped; // Return for immediate use
     } catch (err) {
       console.error("Error loading assets:", err);
+      return [];
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (allAssets.length === 0) {
+    if (user && allAssets.length === 0) {
       loadAssets();
-    } else {
+    } else if (allAssets.length > 0) {
       setLoading(false);
     }
-  }, []);
+  }, [user, allAssets.length]); // Re-run when user loads
 
   const handleSelectAsset = (asset: AssetTypeCard) => {
     addSelectedAsset(asset);
     setShowSelectModal(false);
   };
 
+  const handleEdit = (asset: AssetTypeCard) => {
+    if (asset.originalData) {
+      setEditingAsset(asset.originalData);
+      setShowCreateModal(true);
+    }
+  };
+
   const handleAssetCreated = async () => {
     setShowCreateModal(false);
     setLoading(true);
-    // Reload the assets list to include the newly created asset
-    await loadAssets();
+
+    // 1. Reload global list (gets the new data from DB)
+    const freshAssets = await loadAssets();
+
+    // 2. If we were editing an asset, update it in the "Selected" list too
+    if (editingAsset && freshAssets) {
+      const freshVersion = freshAssets.find((a: AssetTypeCard) => a.id === editingAsset.AssetId);
+      if (freshVersion) {
+        refreshSelectedAsset(freshVersion);
+      }
+    }
+
+    // Clear editing state
+    setEditingAsset(null);
   };
 
   return (
@@ -105,6 +135,7 @@ const SelectAssets = () => {
               <div className="border-t border-gray-200"></div>
               <button
                 onClick={() => {
+                  setEditingAsset(null); // Ensure we are in create mode
                   setShowCreateModal(true);
                   setShowDropdown(false);
                 }}
@@ -135,8 +166,12 @@ const SelectAssets = () => {
 
       {showCreateModal && (
         <CreateAssetModal
+          initialData={editingAsset}
           onSuccess={handleAssetCreated}
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => {
+            setShowCreateModal(false);
+            setEditingAsset(null);
+          }}
         />
       )}
 
@@ -145,10 +180,23 @@ const SelectAssets = () => {
         price, fees, and closing month
       </p>
 
-      {loading ? (
-        <p>Loading...</p>
-      ) : selectedAssets.length === 0 ? (
-        <p>No assets selected.</p>
+      {selectedAssets.length === 0 ? (
+        <div className="space-y-4">
+          {loading ? (
+            <p>Loading...</p>
+          ) : (
+            <p>No assets selected.</p>
+          )}
+          <button
+            onClick={() => {
+              // Navigate to next step (replacement purchases) - same as Next button
+              router.push("?step=replacement-purchases", { scroll: false });
+            }}
+            className="bg-dpa-dark-green text-white font-semibold p-2 px-4 rounded-full hover:bg-green-800 flex items-center gap-2"
+          >
+            Buy Only
+          </button>
+        </div>
       ) : (
         <ul className="scenario-card-grid">
           {selectedAssets.map((asset: AssetTypeCard) => (
@@ -156,6 +204,7 @@ const SelectAssets = () => {
               key={asset.id}
               asset={asset}
               onRemove={removeSelectedAsset}
+              onEdit={handleEdit}
             />
           ))}
         </ul>

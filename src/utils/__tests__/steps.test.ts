@@ -7,13 +7,14 @@ describe('steps utility', () => {
   });
 
   it('has correct number of steps', () => {
-    expect(steps.length).toBe(4);
+    expect(steps.length).toBe(5);
   });
 
   it('has correct step IDs', () => {
     const stepIds = steps.map(step => step.id);
     expect(stepIds).toContain('select-assets');
     expect(stepIds).toContain('replacement-purchases');
+    expect(stepIds).toContain('loans');
     expect(stepIds).toContain('results-tax');
     expect(stepIds).toContain('actions');
   });
@@ -22,6 +23,7 @@ describe('steps utility', () => {
     const stepLabels = steps.map(step => step.label);
     expect(stepLabels).toContain('Select Assets');
     expect(stepLabels).toContain('Add Replacement Purchases');
+    expect(stepLabels).toContain('Loan Manager');
     expect(stepLabels).toContain('Results & Tax');
     expect(stepLabels).toContain('Actions');
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useScenario } from "@/context/ScenarioContext";
 
@@ -11,11 +11,14 @@ export type AssetTypeCard = {
   year: string;
   fair_market_value: number;
   book_value: number;
+  purchase_price: number;
+  originalData?: any; // Full asset object for editing
 };
 
 interface Props {
   asset: AssetTypeCard;
   onRemove: (id: number) => void;
+  onEdit: (asset: AssetTypeCard) => void;
 }
 
 const MONTHS = [
@@ -34,7 +37,7 @@ const MONTHS = [
   { label: "Dec", value: "12" },
 ];
 
-const AssetsCard = ({ asset, onRemove }: Props) => {
+const AssetsCard = ({ asset, onRemove, onEdit }: Props) => {
   const { saleDetails, updateSaleDetails } = useScenario();
 
   const existing = saleDetails[asset.id] ?? {
@@ -50,8 +53,8 @@ const AssetsCard = ({ asset, onRemove }: Props) => {
     existing.fees ? existing.fees.toString() : ""
   );
 
-  const initialMonth = existing.closeMonth ? existing.closeMonth.split("-")[0] : "";
-  const initialYear = existing.closeMonth ? existing.closeMonth.split("-")[1] : "";
+  const initialMonth = existing.closeMonth ? existing.closeMonth.split("-")[1] : "";
+  const initialYear = existing.closeMonth ? existing.closeMonth.split("-")[0] : "";
   const [month, setMonth] = useState<string>(initialMonth);
   const [year, setYear] = useState<string>(initialYear);
 
@@ -85,13 +88,22 @@ const AssetsCard = ({ asset, onRemove }: Props) => {
           </div>
         </div>
 
-        <button
-          onClick={() => onRemove(asset.id)}
-          aria-label="Remove asset"
-          className="mt-1"
-        >
-          <Trash2 className="text-gray-500 hover:text-red-500 transition" />
-        </button>
+        <div className="flex gap-2 mt-1">
+          <button
+            onClick={() => onEdit(asset)}
+            aria-label="Edit asset"
+            className="p-1 hover:bg-gray-100 rounded-full transition"
+          >
+            <Pencil className="w-5 h-5 text-gray-500 hover:text-blue-500" />
+          </button>
+          <button
+            onClick={() => onRemove(asset.id)}
+            aria-label="Remove asset"
+            className="p-1 hover:bg-gray-100 rounded-full transition"
+          >
+            <Trash2 className="w-5 h-5 text-gray-500 hover:text-red-500" />
+          </button>
+        </div>
       </div>
 
       <div className="w-full h-px bg-gray-200" />
@@ -103,7 +115,7 @@ const AssetsCard = ({ asset, onRemove }: Props) => {
       </div>
 
       {/* Inputs */}
-      <div className="grid grid-cols-4 gap-3 items-end">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 items-end">
 
         <InputField
           label="Sale Price"
@@ -118,14 +130,14 @@ const AssetsCard = ({ asset, onRemove }: Props) => {
         />
 
         {/* Close Month */}
-        <div>
+        <div className="col-span-2">
           <label className="text-xs text-gray-600 mb-1 block">Close Month</label>
 
           <div className="flex gap-2">
             <select
               value={month}
               onChange={(e) => setMonth(e.target.value)}
-              className="border rounded-md p-2 w-22"
+              className="border rounded-md p-2 w-full flex-1 min-w-0"
             >
               {MONTHS.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -141,7 +153,7 @@ const AssetsCard = ({ asset, onRemove }: Props) => {
               value={year}
               onChange={(e) => setYear(onlyDigits(e.target.value).slice(0, 4))}
               placeholder="YYYY"
-              className="border rounded-md p-2 w-22"
+              className="border rounded-md p-2 w-full flex-1 min-w-0"
             />
           </div>
         </div>
@@ -159,19 +171,30 @@ const InputField = ({
   label: string;
   value: string;
   onChange: (v: string) => void;
-}) => (
-  <div>
-    <label className="text-xs text-gray-600 mb-1 block">{label}</label>
-    <input
-      inputMode="numeric"
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder="0"
-      className="border rounded-md p-2 w-22"
-    />
-  </div>
-);
+}) => {
+  const getFontSizeClass = (val: string) => {
+    const len = val.length;
+    if (len > 7) return "text-[13px]";
+    if (len > 6) return "text-[14px]";
+    return "text-base"; // Default
+  };
+
+  return (
+    <div>
+      <label className="text-xs text-gray-600 mb-1 block">{label}</label>
+      <input
+        inputMode="numeric"
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="0"
+        className={`border rounded-md p-2 w-full h-10 transition-all ${getFontSizeClass(
+          value
+        )}`}
+      />
+    </div>
+  );
+};
 
 const ValueDisplay = ({ label, value }: { label: string; value: number }) => {
   const formatted = value.toLocaleString("en-US");

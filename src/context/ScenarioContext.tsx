@@ -1,7 +1,8 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode, useCallback } from "react";
 import { AssetTypeCard } from "@/components/assets-card";
+import { useAuth } from "@/context/AuthContext";
 
 // ---- TYPES ----
 export interface ScenarioAssetSaleDetails {
@@ -15,7 +16,8 @@ export type ReplacementMethod =
   | "BONUS"
   | "SECTION_179"
   | "MACRS_GDS"
-  | "MACRS_ADS";
+  | "MACRS_ADS"
+  | "AUTO";
 
 export interface ReplacementAsset {
   id: string;
@@ -24,6 +26,7 @@ export interface ReplacementAsset {
   method: ReplacementMethod;
   businessUse: number;
   inServiceMonth: string;
+  purchaseType?: "REPLACEMENT" | "NEW";
   usefulLife?: number;
 }
 
@@ -74,6 +77,8 @@ interface ScenarioContextType {
   addReplacementAsset: (asset: ReplacementAsset) => void;
   removeReplacementAsset: (id: string) => void;
 
+  refreshSelectedAsset: (asset: AssetTypeCard) => void; // NEW
+
   computeScenario: () => Promise<void>;
   setTaxSettings: (s: Partial<TaxSettings>) => void;
 }
@@ -85,6 +90,7 @@ const ScenarioContext = createContext<ScenarioContextType | null>(null);
 // ------------------------------------------------------------
 
 export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
+  const { user } = useAuth();
   const [selectedAssets, setSelectedAssets] = useState<AssetTypeCard[]>([]);
 
   // NEW: Global cached assets so they don't reload on tab switch
@@ -145,6 +151,15 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
     clearResults();
   };
 
+  // NEW: Update an item in selectedAssets (in-place) to reflect edits
+  const refreshSelectedAsset = (asset: AssetTypeCard) => {
+    setSelectedAssets(prev =>
+      prev.map(a => (a.id === asset.id ? asset : a))
+    );
+    // If values changed (e.g. FMV), results might change if we use FMV.
+    clearResults();
+  };
+
   const setTaxSettings = (s: Partial<TaxSettings>) => {
     setTaxSettingsState(prev => ({ ...prev, ...s }));
     clearResults();
@@ -153,7 +168,7 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
   // ------------------------------------------------------------
   // CALL BACKEND FOR CALCULATION
   // ------------------------------------------------------------
-  const computeScenario = async () => {
+  const computeScenario = useCallback(async () => {
     setLoading(true);
 
     try {
@@ -164,8 +179,8 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
         return {
           assetId: asset.id,
           assetName: asset.asset,
-          originalCost: asset.book_value,
-          accumulatedDepreciation: sale.accumulatedDepreciation || 0,
+          originalCost: asset.purchase_price || asset.book_value,
+          accumulatedDepreciation: (asset.purchase_price || asset.book_value) - asset.book_value,
           salePrice: sale.salePrice || 0,
           transactionFees: sale.fees || 0,
           closeMonth: sale.closeMonth || "",
@@ -182,7 +197,7 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
       }));
 
       const payload = {
-        userId: 1,
+        userId: user?.user_id || 0,
         assetsToSell,
         replacementAssets: replacementAssetsPayload,
         marginalTaxRate: Number(taxSettings.marginalRate) || 0,
@@ -212,7 +227,7 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedAssets, saleDetails, replacementAssets, taxSettings, user]);
 
   // ------------------------------------------------------------
   return (
@@ -234,6 +249,7 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
 
         addReplacementAsset,
         removeReplacementAsset,
+        refreshSelectedAsset,
 
         computeScenario,
         setTaxSettings,
