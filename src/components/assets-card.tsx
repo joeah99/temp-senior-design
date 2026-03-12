@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2, Pencil } from "lucide-react";
+import { X, Pencil } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useScenario } from "@/context/ScenarioContext";
 
@@ -101,7 +101,7 @@ const AssetsCard = ({ asset, onRemove, onEdit }: Props) => {
             aria-label="Remove asset"
             className="p-1 hover:bg-gray-100 rounded-full transition"
           >
-            <Trash2 className="w-5 h-5 text-gray-500 hover:text-red-500" />
+            <X className="w-5 h-5 text-gray-500 hover:text-red-500" />
           </button>
         </div>
       </div>
@@ -115,8 +115,7 @@ const AssetsCard = ({ asset, onRemove, onEdit }: Props) => {
       </div>
 
       {/* Inputs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-
+      <div className="grid grid-cols-2 gap-3 items-end">
         <InputField
           label="Sale Price"
           value={formatNum(salePrice)}
@@ -130,34 +129,35 @@ const AssetsCard = ({ asset, onRemove, onEdit }: Props) => {
         />
 
         {/* Close Month */}
-        <div className="col-span-2">
+        <div>
           <label className="text-xs text-gray-600 mb-1 block">Close Month</label>
-
-          <div className="flex gap-2">
-            <select
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="border rounded-md p-2 w-full flex-1 min-w-0"
-            >
-              {MONTHS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-
-            <input
-              inputMode="numeric"
-              type="text"
-              maxLength={4}
-              value={year}
-              onChange={(e) => setYear(onlyDigits(e.target.value).slice(0, 4))}
-              placeholder="YYYY"
-              className="border rounded-md p-2 w-full flex-1 min-w-0"
-            />
-          </div>
+          <select
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            className="border rounded-md p-2 w-full h-10 bg-white"
+          >
+            {MONTHS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
         </div>
 
+        {/* Close Year */}
+        <div>
+          <label className="text-xs text-gray-600 mb-1 block">Close Year</label>
+          <input
+            inputMode="numeric"
+            type="text"
+            maxLength={4}
+            value={year}
+            onChange={(e) => setYear(onlyDigits(e.target.value).slice(0, 4))}
+            placeholder="YYYY"
+            className="border rounded-md p-2 w-full h-10 transition-all text-base"
+            autoComplete="off"
+          />
+        </div>
       </div>
     </li>
   );
@@ -191,6 +191,7 @@ const InputField = ({
         className={`border rounded-md p-2 w-full h-10 transition-all ${getFontSizeClass(
           value
         )}`}
+        autoComplete="off"
       />
     </div>
   );

@@ -5,7 +5,7 @@ import { LoanInformationDTO } from "@/types/loans";
 import { Edit, Trash2 } from "lucide-react";
 
 interface SimpleAsset {
-    id: number;
+    id: number | string; // Support composite IDs like "asset-123" or "purchase-456"
     name: string;
 }
 
@@ -25,9 +25,9 @@ const LoansTable = ({ loans, assets, onEdit, onDelete }: LoansTableProps) => {
         );
     }
 
-    const getAssetName = (assetId: number | null | undefined) => {
+    const getAssetName = (assetId: number | string | null | undefined) => {
         if (!assetId) return null;
-        const asset = assets.find(a => a.id === assetId);
+        const asset = assets.find(a => String(a.id) === String(assetId));
         return asset ? asset.name : "Unknown Asset";
     };
 
@@ -82,28 +82,39 @@ const LoansTable = ({ loans, assets, onEdit, onDelete }: LoansTableProps) => {
                         {/* Rate / Term */}
                         <div>
                             <p className="text-xs text-gray-500 mb-1">Rate & Term</p>
-                            <div className="flex items-baseline gap-1">
-                                <span className="font-medium text-gray-900">{loan.interest_rate}%</span>
-                                <span className="text-xs text-gray-400">for {loan.loan_term_years} yrs</span>
+                            <div className="flex flex-col gap-1">
+                                <div className="flex items-baseline gap-1">
+                                    <span className="font-medium text-gray-900">{loan.interest_rate}%</span>
+                                    <span className="text-xs text-gray-400">for {loan.loan_term_years} yrs</span>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Payoff Date (Approx) */}
+                        {/* Payoff Date (Approx) / LTV */}
                         <div className="text-right">
-                            {/* Placeholder for payoff date if we calculate it here or in DTO */}
+                            <p className="text-xs text-gray-500 mb-1">LTV</p>
+                            <div className="flex flex-col gap-1 items-end">
+                                {loan.ltv != null ? (
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="font-medium text-gray-900">{loan.ltv}%</span>
+                                    </div>
+                                ) : (
+                                    <span className="text-xs text-gray-400">-</span>
+                                )}
+                            </div>
                         </div>
 
                     </div>
 
-                    {/* Linked Asset */}
-                    {loan.asset_id && (
-                        <div className="mb-4 bg-gray-50 rounded p-2 flex items-center gap-2 border border-gray-100">
-                            <span className="text-blue-500 text-xs">🔗</span>
-                            <span className="text-sm text-gray-700 font-medium truncate">
-                                {getAssetName(loan.asset_id)}
-                            </span>
-                        </div>
-                    )}
+                    {/* Linked Asset/Purchase */}
+                    <div className="mb-4 bg-gray-50 rounded p-2 flex items-center gap-2 border border-gray-100">
+                        <span className="text-blue-500 text-xs">🔗</span>
+                        <span className="text-sm text-gray-700 font-medium truncate">
+                            {loan.linked_type && loan.linked_id
+                                ? getAssetName(`${loan.linked_type}-${loan.linked_id}`)
+                                : 'None'}
+                        </span>
+                    </div>
 
                     {/* Actions */}
                     <div className="flex justify-end gap-2 mt-auto pt-2 border-t border-gray-100">

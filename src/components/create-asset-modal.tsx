@@ -195,10 +195,6 @@ const CreateAssetModal = ({ onSuccess, onClose, initialData }: Props) => {
         State: "", // Hardcoded empty as removed from UI
         DepreciationMethod: depreciationMethod,
         UsefulLife: Number(usefulLife),
-        DepreciationRate: 0,
-        TotalExpectedUnitsOfProduction: 0,
-        UnitsProducedInYear: 0,
-        Deleted: false,
         fairMarketValuesOverTime: [],
         assetDepreciationSchedule: [],
       };
@@ -245,7 +241,7 @@ const CreateAssetModal = ({ onSuccess, onClose, initialData }: Props) => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
           {/* Basic Info */}
           <div className="mb-6">
             <h4 className="font-semibold text-lg mb-3 text-gray-700">

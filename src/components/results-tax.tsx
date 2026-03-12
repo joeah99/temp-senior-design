@@ -239,6 +239,19 @@ const ResultsTax = () => {
               </div>
             </div>
 
+            {/* Annual Debt Service Display */}
+            {computedResults.totalAnnualDebtService > 0 && (
+              <div className="bg-slate-50 border border-slate-200 rounded p-4 mb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold text-slate-700">Annual Debt Service (Existing Loans)</span>
+                    <span className="text-xs text-slate-500 mt-0.5">From your active loans in Loan Manager</span>
+                  </div>
+                  <span className="text-lg font-bold text-slate-700">-${formatCurrency(computedResults.totalAnnualDebtService)}</span>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between bg-white border border-gray-200 p-4 rounded-lg shadow-sm">
               <span className="font-bold text-gray-800 text-lg">NET CASH IMPACT</span>
               <span className={`text-2xl font-extrabold ${computedResults.netCashFlow >= 0 ? "text-green-700" : "text-red-700"}`}>

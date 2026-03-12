@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { AssetTypeCard } from "@/components/assets-card";
 import { useAuth } from "@/context/AuthContext";
 
@@ -20,7 +20,7 @@ export type ReplacementMethod =
   | "AUTO";
 
 export interface ReplacementAsset {
-  id: string;
+  id: string | number;
   name: string;
   cost: number;
   method: ReplacementMethod;
@@ -28,6 +28,14 @@ export interface ReplacementAsset {
   inServiceMonth: string;
   purchaseType?: "REPLACEMENT" | "NEW";
   usefulLife?: number;
+  // New fields
+  assetType?: string;
+  condition?: string;
+  manufacturer?: string;
+  model?: string;
+  modelYear?: string;
+  usage?: number;
+  usageUnit?: string;
 }
 
 export interface ScenarioResultsFromBackend {
@@ -45,6 +53,7 @@ export interface ScenarioResultsFromBackend {
   taxSavingsFromDeductions: number;
   cashRequiredForReplacements: number;
   netCashFlow: number;
+  totalAnnualDebtService: number; // Annual debt service from existing loans
   saleDetails: any[];
   replacementDetails: any[];
   calculatedAt: string;
@@ -75,7 +84,8 @@ interface ScenarioContextType {
   updateSaleDetails: (id: number, details: Partial<ScenarioAssetSaleDetails>) => void;
 
   addReplacementAsset: (asset: ReplacementAsset) => void;
-  removeReplacementAsset: (id: string) => void;
+  removeReplacementAsset: (id: string | number) => void;
+  setReplacementAssets: (assets: ReplacementAsset[]) => void;
 
   refreshSelectedAsset: (asset: AssetTypeCard) => void; // NEW
 
@@ -91,18 +101,13 @@ const ScenarioContext = createContext<ScenarioContextType | null>(null);
 
 export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
+
+  // State Initialization with correct types
   const [selectedAssets, setSelectedAssets] = useState<AssetTypeCard[]>([]);
-
-  // NEW: Global cached assets so they don't reload on tab switch
   const [allAssets, setAllAssets] = useState<AssetTypeCard[]>([]);
-
-  const [saleDetails, setSaleDetails] =
-    useState<Record<number, ScenarioAssetSaleDetails>>({});
-
+  const [saleDetails, setSaleDetails] = useState<Record<number, ScenarioAssetSaleDetails>>({});
   const [replacementAssets, setReplacementAssets] = useState<ReplacementAsset[]>([]);
-
-  const [computedResults, setComputedResults] =
-    useState<ScenarioResultsFromBackend | null>(null);
+  const [computedResults, setComputedResults] = useState<ScenarioResultsFromBackend | null>(null);
 
   const [taxSettings, setTaxSettingsState] = useState<TaxSettings>({
     marginalRate: "",
@@ -112,6 +117,47 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
   });
 
   const [loading, setLoading] = useState(false);
+
+  // ------------------------------------------------------------
+  // PERSISTENCE (LocalStorage)
+  // ------------------------------------------------------------
+
+  // Load state on mount
+  useEffect(() => {
+    try {
+      const savedSelected = localStorage.getItem("scenario_selectedAssets");
+      if (savedSelected) setSelectedAssets(JSON.parse(savedSelected));
+
+      const savedSaleDetails = localStorage.getItem("scenario_saleDetails");
+      if (savedSaleDetails) setSaleDetails(JSON.parse(savedSaleDetails));
+
+      const savedReplacements = localStorage.getItem("scenario_replacementAssets");
+      if (savedReplacements) setReplacementAssets(JSON.parse(savedReplacements));
+
+      const savedTax = localStorage.getItem("scenario_taxSettings");
+      if (savedTax) setTaxSettingsState(JSON.parse(savedTax));
+
+    } catch (e) {
+      console.error("Failed to load scenario state from localStorage", e);
+    }
+  }, []);
+
+  // Save state on changes
+  useEffect(() => {
+    localStorage.setItem("scenario_selectedAssets", JSON.stringify(selectedAssets));
+  }, [selectedAssets]);
+
+  useEffect(() => {
+    localStorage.setItem("scenario_saleDetails", JSON.stringify(saleDetails));
+  }, [saleDetails]);
+
+  useEffect(() => {
+    localStorage.setItem("scenario_replacementAssets", JSON.stringify(replacementAssets));
+  }, [replacementAssets]);
+
+  useEffect(() => {
+    localStorage.setItem("scenario_taxSettings", JSON.stringify(taxSettings));
+  }, [taxSettings]);
 
   // Reset results when inputs change
   const clearResults = () => setComputedResults(null);
@@ -146,8 +192,8 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
     clearResults();
   };
 
-  const removeReplacementAsset = (id: string) => {
-    setReplacementAssets(prev => prev.filter(a => a.id !== id));
+  const removeReplacementAsset = (id: string | number) => {
+    setReplacementAssets(prev => prev.filter(a => String(a.id) !== String(id)));
     clearResults();
   };
 
@@ -249,6 +295,7 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
 
         addReplacementAsset,
         removeReplacementAsset,
+        setReplacementAssets,
         refreshSelectedAsset,
 
         computeScenario,

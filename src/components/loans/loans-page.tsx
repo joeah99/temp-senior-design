@@ -10,7 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 const API_BASE_URL = "http://localhost:8000";
 
 export interface SimpleAsset {
-    id: number;
+    id: number | string; // Support composite IDs like "asset-123" or "purchase-456"
     name: string;
 }
 
@@ -40,17 +40,35 @@ const LoansPage = () => {
                 body: JSON.stringify({ user_id: user.user_id }),
             });
 
+            const mappedAssets: SimpleAsset[] = [];
             if (assetsRes.ok) {
                 const rawAssets = await assetsRes.json();
-                // Map to SimpleAsset
-                const mappedAssets = rawAssets.map((a: any) => ({
-                    id: a.AssetId, // Note PascalCase from backend
-                    name: `${a.ModelYear} ${a.Manufacturer} ${a.Model} (${a.Type})`
-                }));
-                setAssets(mappedAssets);
+                // Map to SimpleAsset with asset- prefix (NO display prefix)
+                mappedAssets.push(...rawAssets.map((a: any) => ({
+                    id: `asset-${a.AssetId}`, // Composite ID
+                    name: `${a.ModelYear} ${a.Manufacturer} ${a.Model}`,
+                    purchasePrice: a.PurchasePrice
+                })));
             } else {
                 console.error("Failed to fetch assets");
             }
+
+            // Fetch Purchases
+            const purchasesRes = await fetch(`${API_BASE_URL}/purchases?user_id=${user.user_id}`);
+            if (purchasesRes.ok) {
+                const rawPurchases = await purchasesRes.json();
+                // Map to SimpleAsset with purchase- prefix (NO display prefix)
+                mappedAssets.push(...rawPurchases.map((p: any) => ({
+                    id: `purchase-${p.purchase_id}`, // Composite ID
+                    name: p.asset_name,
+                    purchasePrice: p.cost
+                })));
+            } else {
+                console.error("Failed to fetch purchases");
+            }
+
+            // Set combined list
+            setAssets(mappedAssets);
 
         } catch (error) {
             console.error("Error fetching data:", error);
@@ -70,12 +88,28 @@ const LoansPage = () => {
     const handleSaveLoan = async (loanData: any) => {
         if (!user) return;
 
+        // Parse composite ID to linked_type and linked_id
+        let linked_type = null;
+        let linked_id = null;
+        if (loanData.asset_id) {
+            const compositeId = loanData.asset_id;
+            if (compositeId.startsWith('asset-')) {
+                linked_type = 'asset';
+                linked_id = parseInt(compositeId.replace('asset-', ''));
+            } else if (compositeId.startsWith('purchase-')) {
+                linked_type = 'purchase';
+                linked_id = parseInt(compositeId.replace('purchase-', ''));
+            }
+        }
+
         // Ensure user_id is in the data
         const payload = {
             ...loanData,
             user_id: user.user_id,
-            asset_id: loanData.asset_id ? parseInt(loanData.asset_id) : null
+            linked_type,
+            linked_id
         };
+        delete payload.asset_id; // Remove old field
 
         try {
             let url = `${API_BASE_URL}/loans`;
@@ -183,7 +217,7 @@ const LoansPage = () => {
             />
             {/* Delete Confirmation Modal */}
             {isDeleteModalOpen && loanToDelete && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 overflow-y-auto">
                     <div className="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 border border-red-100">
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Loan?</h3>
                         <p className="text-sm text-gray-600 mb-6">

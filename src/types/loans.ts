@@ -1,6 +1,7 @@
 export interface LoanInformationDTO {
     loan_id: number;
-    asset_id?: number | null;
+    linked_type?: string | null;  // 'asset' or 'purchase'
+    linked_id?: number | null;    // ID of the linked asset or purchase
     user_id: number;
     lender_name: string;
     loan_name: string;
@@ -13,9 +14,8 @@ export interface LoanInformationDTO {
     payment_frequency: string;
     status: string;
     loan_start_date?: string | null;
-    last_payment_date?: string | null;
-    next_payment_date?: string | null;
     loan_end_date?: string | null;
+    ltv?: number | null;
     loan_schedule?: any[]; // Define properly if needed later
     created_at?: string;
     updated_at?: string;
@@ -35,6 +35,7 @@ export interface LoanCreateRequest {
     payment_frequency?: string;
     status?: string;
     loan_start_date?: string | null;
+    ltv?: number | null;
 }
 
 export interface LoanUpdateRequest {
@@ -52,4 +53,5 @@ export interface LoanUpdateRequest {
     payment_frequency: string;
     status: string;
     loan_start_date?: string | null;
+    ltv?: number | null;
 }

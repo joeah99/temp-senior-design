@@ -10,7 +10,7 @@ const NavBar = () => {
     <header className="flex items-center justify-between py-4 px-8 bg-white shadow-sm shadow-zinc-200 fixed z-50 top-0 w-full h-20">
       <nav className="">
         <Link href="/">
-          <Image src="/img/dpa-logo.jpg" alt="logo" height={0} width={95} />
+          <Image src="/img/dpa-logo.jpg" alt="logo" width={95} height={40} style={{ height: "auto" }} />
         </Link>
       </nav>
       {user && (
