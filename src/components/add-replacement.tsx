@@ -6,6 +6,7 @@ import React, { useState, useEffect } from "react";
 import { useScenario, ReplacementAsset } from "@/context/ScenarioContext";
 import { useAuth } from "@/context/AuthContext";
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, CartesianGrid } from "recharts";
+import AiUploadModal from "./upload/ai-upload-modal";
 
 const onlyDigits = (str: string) => str.replace(/\D/g, "");
 const formatWithCommas = (num: number | "") =>
@@ -95,6 +96,7 @@ const AddReplacement = () => {
             manufacturer: p.manufacturer,
             model: p.model,
             modelYear: p.model_year,
+            serialNumber: p.serial_number,
             usage: p.usage,
             usageUnit: p.usage_unit,
             purchaseType: p.purchase_type
@@ -114,6 +116,7 @@ const AddReplacement = () => {
   const [manufacturer, setManufacturer] = useState("");
   const [model, setModel] = useState("");
   const [modelYear, setModelYear] = useState("");
+  const [serialNumber, setSerialNumber] = useState("");
   // Condition removed
   const [usage, setUsage] = useState<number | "">("");
   const [usageUnit, setUsageUnit] = useState("hours");
@@ -143,6 +146,7 @@ const AddReplacement = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
   const [showLowBusinessUseError, setShowLowBusinessUseError] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
 
   // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -276,6 +280,7 @@ const AddReplacement = () => {
         manufacturer: manufacturer,
         model: model,
         model_year: modelYear,
+        serial_number: serialNumber === "" ? null : serialNumber,
         usage: usage === "" ? null : Number(usage),
         usage_unit: usageUnit,
         cost: Number(cost),
@@ -321,6 +326,7 @@ const AddReplacement = () => {
           manufacturer,
           model,
           modelYear,
+          serialNumber: serialNumber === "" ? undefined : serialNumber,
           usage: usage === "" ? undefined : Number(usage),
           usageUnit,
         });
@@ -329,6 +335,7 @@ const AddReplacement = () => {
         setManufacturer("");
         setModel("");
         setModelYear("");
+        setSerialNumber("");
         setUsage("");
         setCost("");
         setMethod("AUTO");
@@ -346,7 +353,31 @@ const AddReplacement = () => {
 
   return (
     <section id="replacement-purchases" className="min-h-screen max-w-4xl">
-      <h2 className="scenario-heading mb-6">Add Replacement Purchases</h2>
+      <div className="flex flex-row items-center justify-between mb-6">
+        <h2 className="scenario-heading">Add Replacement Purchases</h2>
+        <button
+          onClick={() => setShowAiModal(true)}
+          className="bg-green-50 text-dpa-dark-green font-semibold p-2 px-4 rounded-full hover:bg-green-100 flex items-center gap-2 border border-green-200"
+        >
+          <span>✨</span> Extract via AI
+        </button>
+      </div>
+
+      <AiUploadModal
+        isOpen={showAiModal}
+        onClose={() => setShowAiModal(false)}
+        onSave={(data) => {
+          if (data.asset_type) setAssetType(data.asset_type);
+          if (data.manufacturer) setManufacturer(data.manufacturer);
+          if (data.model) setModel(data.model);
+          if (data.model_year) setModelYear(data.model_year.toString());
+          if (data.serial_number) setSerialNumber(data.serial_number);
+          if (data.usage != null) setUsage(Math.round(data.usage));
+          if (data.purchase_price != null) setCost(Math.round(data.purchase_price));
+          if (data.purchase_month) setMonth(data.purchase_month.padStart(2, '0'));
+          if (data.purchase_year) setYear(data.purchase_year.toString());
+        }}
+      />
 
 
 
@@ -354,10 +385,10 @@ const AddReplacement = () => {
       <div className="bg-white border rounded-lg p-5 mb-10 shadow-sm">
         <h3 className="font-semibold text-lg mb-4">Tax Settings</h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Marginal Tax Rate */}
           <div>
-            <label className="text-sm text-gray-600 font-medium">Marginal Tax Rate <span className="text-red-500">*</span></label>
+            <label className="text-sm text-gray-600 font-medium">Federal Tax Rate <span className="text-red-500">*</span></label>
             <select
               value={
                 taxSettings.marginalRate === ""
@@ -379,6 +410,29 @@ const AddReplacement = () => {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* State Tax Rate */}
+          <div>
+            <label className="text-sm text-gray-600 font-medium">State Tax Rate (Optional)</label>
+            <div className="relative">
+              <input
+                type="text"
+                value={taxSettings.stateTaxRate === "" || taxSettings.stateTaxRate == null ? "" : Math.round(taxSettings.stateTaxRate * 100).toString()}
+                onChange={(e) => {
+                  const cleaned = onlyDigits(e.target.value).slice(0, 2);
+                  const val = cleaned === "" ? "" : Number(cleaned) / 100;
+                  setTaxSettings({
+                    stateTaxRate: val,
+                  });
+                }}
+                className="w-full border p-2 rounded pr-6"
+                autoComplete="off"
+              />
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <span className="text-gray-500">%</span>
+              </div>
+            </div>
           </div>
 
           {/* Section 179 Limit */}
@@ -438,7 +492,7 @@ const AddReplacement = () => {
       <div className="bg-white border rounded-lg p-5 mb-10 shadow-sm">
         <h3 className="font-semibold text-lg mb-4">Add a Replacement Asset</h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
           {/* Asset Type */}
           <div>
@@ -493,6 +547,19 @@ const AddReplacement = () => {
             />
           </div>
 
+          {/* Serial Number */}
+          <div>
+            <label className="text-sm text-gray-600 font-medium">Serial Number (Optional)</label>
+            <input
+              type="text"
+              maxLength={30}
+              value={serialNumber}
+              onChange={(e) => setSerialNumber(e.target.value)}
+              className="w-full border p-2 rounded uppercase"
+              autoComplete="off"
+            />
+          </div>
+
           {/* Usage */}
           <div>
             <label className="text-sm text-gray-600 font-medium">Usage (Optional)</label>
@@ -538,28 +605,9 @@ const AddReplacement = () => {
             />
           </div>
 
-          {/* Method */}
-          <div>
-            <label className="text-sm text-gray-600">Depreciation Method</label>
-            <select
-              value={method}
-              onChange={(e) =>
-                setMethod(e.target.value as ReplacementMethod)
-              }
-              className="w-full border p-2 rounded"
-            >
-              <option value="AUTO">✨ Auto-Maximize Tax Savings</option>
-              <option value="BONUS">Bonus Depreciation</option>
-              <option value="SECTION_179">§179 Expensing</option>
-              <option value="MACRS_GDS">MACRS GDS (Accelerated)</option>
-              <option value="MACRS_ADS">MACRS ADS (Straight-Line)</option>
-            </select>
-            <MethodHelp method={method} />
-          </div>
-
           {/* Business Use */}
           <div>
-            <label className="text-sm text-gray-600">Business Use %</label>
+            <label className="text-sm text-gray-600 font-medium">Business Use %</label>
             <input
               type="text"
               inputMode="numeric"
@@ -576,7 +624,7 @@ const AddReplacement = () => {
 
           {/* In-service date */}
           <div>
-            <label className="text-sm text-gray-600">In-service Month</label>
+            <label className="text-sm text-gray-600 font-medium">In-service Month</label>
             <div className="flex gap-2">
               <select
                 value={month}
@@ -603,11 +651,32 @@ const AddReplacement = () => {
             </div>
           </div>
 
+          {/* Method */}
+          <div className="sm:col-span-2">
+            <label className="text-sm text-gray-600 font-medium">Depreciation Method</label>
+            <select
+              value={method}
+              onChange={(e) =>
+                setMethod(e.target.value as ReplacementMethod)
+              }
+              className="w-full border p-2 rounded"
+            >
+              <option value="AUTO">✨ Auto-Maximize Tax Savings</option>
+              <option value="BONUS">Bonus Depreciation</option>
+              <option value="SECTION_179">§179 Expensing</option>
+              <option value="MACRS_GDS">MACRS GDS (Accelerated)</option>
+              <option value="MACRS_ADS">MACRS ADS (Straight-Line)</option>
+            </select>
+            <MethodHelp method={method} />
+          </div>
+
+
+
           {/* Add Button */}
-          <div className="flex items-end">
+          <div className="flex items-start mt-6 w-full">
             <button
               onClick={handleAdd}
-              className="w-full bg-dpa-dark-green text-white px-4 py-2 rounded shadow hover:bg-green-800 transition font-semibold"
+              className="w-full bg-dpa-dark-green text-white px-4 py-2 rounded shadow hover:bg-green-800 transition font-semibold h-[42px]"
             >
               Add Replacement
             </button>

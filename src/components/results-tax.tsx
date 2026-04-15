@@ -103,7 +103,7 @@ const ResultsTax = () => {
     !computedResults?.warnings?.some(w => w.includes("tax rate")) && (!taxSettings.marginalRate || Number(taxSettings.marginalRate) === 0) && (
       <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mb-6 text-sm">
         <p className="font-bold">Missing Tax Rate</p>
-        <p>Please set your marginal tax rate on the previous page to ensure accurate tax calculations.</p>
+        <p>Please set your marginal tax rate on the Add Replacement Purchases page to ensure accurate tax calculations.</p>
       </div>
     )
   }
@@ -185,7 +185,7 @@ const ResultsTax = () => {
       {!computedResults?.warnings?.some(w => w.includes("tax rate")) && (!taxSettings.marginalRate || Number(taxSettings.marginalRate) === 0) && (
         <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mb-6 text-sm">
           <p className="font-bold">Missing Tax Rate</p>
-          <p>Please set your marginal tax rate on the previous page to ensure accurate tax calculations.</p>
+          <p>Please set your marginal tax rate on the Add Replacement Purchases page to ensure accurate tax calculations.</p>
         </div>
       )}
 
@@ -201,7 +201,8 @@ const ResultsTax = () => {
               <DataRow label="Transaction Fees" value={computedResults.totalTransactionFees} />
               <DataRow label="§1245 Recapture (Ordinary)" value={computedResults.totalSection1245Recapture} />
               <DataRow label="§1231 Gain (Capital)" value={computedResults.totalSection1231Gain} />
-              <DataRow label="Est. Tax on Sales" value={computedResults.totalTaxOnSales} />
+              <DataRow label="Est. Federal Tax on Sales" value={computedResults.federalTaxOnSales || 0} />
+              <DataRow label="Est. State Tax on Sales" value={computedResults.stateTaxOnSales || 0} />
               <div className="mt-2 pt-2 border-t border-gray-200">
                 <DataRow label="Net Cash from Sales" value={computedResults.netCashFromLiquidation} highlight colorClass={getDynamicColor(computedResults.netCashFromLiquidation)} />
               </div>
@@ -214,8 +215,10 @@ const ResultsTax = () => {
               <DataRow label="§179 Deduction" value={computedResults.totalSection179} />
               <DataRow label="MACRS (Year 1)" value={computedResults.totalMacrsFirstYear} />
               <DataRow label="Total First-Year Write-off" value={computedResults.totalFirstYearDeductions} highlight />
+              <DataRow label="Est. Federal Tax Savings" value={computedResults.federalTaxSavingsFromDeductions || 0} />
+              <DataRow label="Est. State Tax Savings" value={computedResults.stateTaxSavingsFromDeductions || 0} />
               <div className="mt-2 pt-2 border-t border-gray-200">
-                <DataRow label="Est. Tax Savings" value={computedResults.taxSavingsFromDeductions} highlight colorClass={getDynamicColor(computedResults.taxSavingsFromDeductions)} />
+                <DataRow label="Total Est. Tax Savings" value={computedResults.taxSavingsFromDeductions} highlight colorClass={getDynamicColor(computedResults.taxSavingsFromDeductions)} />
               </div>
             </SummaryCard>
           </div>

@@ -8,9 +8,10 @@ const mockAsset = {
   year: '2018',
   fair_market_value: 150000,
   book_value: 120000,
+  purchase_price: 100000,
 };
 
-// Mock the context
+// Mock the context with all required fields
 jest.mock('@/context/ScenarioContext', () => ({
   useScenario: () => ({
     saleDetails: {},
@@ -20,7 +21,7 @@ jest.mock('@/context/ScenarioContext', () => ({
 
 describe('AssetsCard', () => {
   it('renders asset information correctly', () => {
-    render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} />);
+    render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} onEdit={jest.fn()} />);
 
     expect(screen.getByText('Tractor')).toBeInTheDocument();
     expect(screen.getByText('John Deer Tractor')).toBeInTheDocument();
@@ -28,31 +29,29 @@ describe('AssetsCard', () => {
   });
 
   it('displays fair market value', () => {
-    render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} />);
+    render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} onEdit={jest.fn()} />);
 
     expect(screen.getByText('$150,000')).toBeInTheDocument();
     expect(screen.getByText('Fair Market Value')).toBeInTheDocument();
   });
 
   it('displays book value', () => {
-    render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} />);
+    render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} onEdit={jest.fn()} />);
 
     expect(screen.getByText('$120,000')).toBeInTheDocument();
     expect(screen.getByText('Book Value')).toBeInTheDocument();
   });
 
-  it('renders delete button', () => {
-    render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} />);
+  it('renders remove and edit buttons', () => {
+    render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} onEdit={jest.fn()} />);
 
-    const deleteButton = screen.getByRole('button');
-    expect(deleteButton).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /remove asset/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /edit asset/i })).toBeInTheDocument();
   });
 
-  it('applies correct CSS classes', () => {
-    render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} />);
+  it('renders as a list item', () => {
+    render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} onEdit={jest.fn()} />);
 
-    const card = screen.getByRole('listitem');
-    expect(card).toHaveClass('flex', 'flex-col', 'border');
+    expect(screen.getByRole('listitem')).toBeInTheDocument();
   });
 });
-

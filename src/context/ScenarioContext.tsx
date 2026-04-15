@@ -36,6 +36,7 @@ export interface ReplacementAsset {
   modelYear?: string;
   usage?: number;
   usageUnit?: string;
+  serialNumber?: string;
 }
 
 export interface ScenarioResultsFromBackend {
@@ -44,6 +45,8 @@ export interface ScenarioResultsFromBackend {
   totalSection1245Recapture: number;
   totalSection1231Gain: number;
   totalTaxOnSales: number;
+  federalTaxOnSales: number;
+  stateTaxOnSales: number;
   netCashFromLiquidation: number;
   totalReplacementCost: number;
   totalBonusDepreciation: number;
@@ -51,6 +54,8 @@ export interface ScenarioResultsFromBackend {
   totalMacrsFirstYear: number;
   totalFirstYearDeductions: number;
   taxSavingsFromDeductions: number;
+  federalTaxSavingsFromDeductions: number;
+  stateTaxSavingsFromDeductions: number;
   cashRequiredForReplacements: number;
   netCashFlow: number;
   totalAnnualDebtService: number; // Annual debt service from existing loans
@@ -63,6 +68,7 @@ export interface ScenarioResultsFromBackend {
 
 export interface TaxSettings {
   marginalRate: number | "";
+  stateTaxRate: number | "";
   section179Limit: number | "";
   bonusPercent: number | "";
   capitalGainsRate: number;
@@ -111,6 +117,7 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
 
   const [taxSettings, setTaxSettingsState] = useState<TaxSettings>({
     marginalRate: "",
+    stateTaxRate: "",
     section179Limit: "",
     bonusPercent: "",
     capitalGainsRate: 0.15,
@@ -247,6 +254,7 @@ export const ScenarioProvider = ({ children }: { children: ReactNode }) => {
         assetsToSell,
         replacementAssets: replacementAssetsPayload,
         marginalTaxRate: Number(taxSettings.marginalRate) || 0,
+        stateTaxRate: Number(taxSettings.stateTaxRate) || 0,
         capitalGainsRate: taxSettings.capitalGainsRate,
         businessIncomeLimit: null,
         overrideSection179Limit: Number(taxSettings.section179Limit) || null,

@@ -1,71 +1,43 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import Home from '../page';
 
-// Mock fetch globally
-global.fetch = jest.fn();
+// Mock AuthContext
+jest.mock('@/context/AuthContext', () => ({
+  useAuth: jest.fn(),
+}));
 
-// Set environment variable for tests
-const originalEnv = process.env.NEXT_PUBLIC_API_URL;
-beforeAll(() => {
-  process.env.NEXT_PUBLIC_API_URL = 'http://localhost:5000';
-});
+import { useAuth } from '@/context/AuthContext';
 
-afterAll(() => {
-  process.env.NEXT_PUBLIC_API_URL = originalEnv;
-});
+// Mock next/navigation
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
 
 describe('Home Page', () => {
   beforeEach(() => {
-    (global.fetch as jest.Mock).mockClear();
+    jest.clearAllMocks();
   });
 
-  it('renders the heading', () => {
-    // Mock fetch before rendering
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({}),
-    });
-    
+  it('shows loading state while auth is loading', () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: null, loading: true });
     render(<Home />);
-    expect(screen.getByText('Testing backend connection...')).toBeInTheDocument();
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
 
-  it('fetches data from API on mount', async () => {
-    const mockData = { message: 'Backend connected' };
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockData,
-    });
-
+  it('renders AuthForm when not logged in', () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: null, loading: false });
     render(<Home />);
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
-    });
+    // AuthForm is rendered — the heading is present
+    expect(screen.getByRole('heading', { name: /Asset Manager/i })).toBeInTheDocument();
   });
 
-  it('handles fetch errors gracefully', async () => {
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
-
+  it('redirects to /scenarios when user is logged in', () => {
+    (useAuth as jest.Mock).mockReturnValue({
+      user: { full_name: 'Test User', email: 'test@test.com' },
+      loading: false,
+    });
     render(<Home />);
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
-    });
-  });
-
-  it('calls correct API endpoint', async () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({}),
-    });
-
-    render(<Home />);
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(`${apiUrl}/Valuation/total-fmv`);
-    });
+    expect(mockPush).toHaveBeenCalledWith('/scenarios');
   });
 });
-

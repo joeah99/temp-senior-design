@@ -24,6 +24,7 @@ interface SimpleAsset {
     id: number | string; // Support composite IDs like "asset-123" or "purchase-456"
     name: string;
     purchasePrice?: number; // Optional purchase price for LTV calculation
+    fmv?: number; // Primary for LTV calculation
 }
 
 interface LoanDrawerProps {
@@ -61,11 +62,13 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
         const n = (parseFloat(formData.loan_term_years || "0") * 12);
 
         let pmt = 0;
-        if (formData.loan_type === "Lease") {
-            // Lease: Do not auto-calculate. User enters manually.
-            return;
+        if (formData.loan_type === "Line of Credit") {
+            // Interest-Only Payment for Line of Credit
+            if (P > 0 && r > 0) {
+                pmt = P * r;
+            }
         } else {
-            // Standard Term Loan Amortization
+            // Standard Term Loan Amortization (Term Loan)
             if (P > 0 && r > 0 && n > 0) {
                 pmt = P * (r * Math.pow(1 + r, n)) / (Math.pow(1 + r, n) - 1);
             } else if (P > 0 && n > 0 && r === 0) {
@@ -104,14 +107,15 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
         setExpectedPayoff("");
     }, [formData.loan_start_year, formData.loan_start_month, formData.loan_term_years]);
 
-    // Auto-calculate LTV if an asset is selected and has a purchase price
+    // Auto-calculate LTV if an asset is selected and has FMV or a purchase price
     useEffect(() => {
         if (formData.asset_id && formData.loan_amount) {
             const asset = assets.find(a => String(a.id) === String(formData.asset_id));
-            if (asset && asset.purchasePrice && asset.purchasePrice > 0) {
+            const baselineValue = asset ? (asset.fmv && asset.fmv > 0 ? asset.fmv : asset.purchasePrice) : null;
+            if (baselineValue && baselineValue > 0) {
                 const amount = parseFloat(formData.loan_amount);
                 if (!isNaN(amount)) {
-                    const ltvValue = (amount / asset.purchasePrice) * 100;
+                    const ltvValue = (amount / baselineValue) * 100;
                     const roundedLtv = ltvValue.toFixed(2);
                     // Avoid infinite loop by only updating if it changed
                     if (roundedLtv !== formData.ltv) {
@@ -137,13 +141,13 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
                 lender_name: loanToEdit.lender_name,
                 loan_name: loanToEdit.loan_name,
                 loan_type: loanToEdit.loan_type,
-                loan_amount: loanToEdit.loan_amount.toString(),
-                interest_rate: loanToEdit.interest_rate.toString(),
-                loan_term_years: loanToEdit.loan_term_years.toString(),
-                remaining_balance: loanToEdit.remaining_balance.toString(),
-                monthly_payment: loanToEdit.monthly_payment.toString(),
-                payment_frequency: loanToEdit.payment_frequency,
-                status: loanToEdit.status,
+                loan_amount: loanToEdit.loan_amount?.toString() || "",
+                interest_rate: loanToEdit.interest_rate?.toString() || "",
+                loan_term_years: loanToEdit.loan_term_years?.toString() || "",
+                remaining_balance: loanToEdit.remaining_balance?.toString() || "",
+                monthly_payment: loanToEdit.monthly_payment?.toString() || "",
+                payment_frequency: loanToEdit.payment_frequency || "Monthly",
+                status: loanToEdit.status || "Active",
                 loan_start_year: dateParts[0] || "",
                 loan_start_month: dateParts[1] || "",
                 asset_id: assetId,
@@ -169,16 +173,9 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
         }
     }, [loanToEdit, isOpen]);
 
-    // Clear fields when switching to Lease
+    // No longer need Lease-specific clearing logic
     useEffect(() => {
-        if (formData.loan_type === "Lease") {
-            setFormData(prev => ({
-                ...prev,
-                loan_amount: "",
-                remaining_balance: "",
-                interest_rate: ""
-            }));
-        }
+        // Cleaning up redundant Lease references
     }, [formData.loan_type]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -202,10 +199,23 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Handle defaults for Lease
-        const amount = formData.loan_type === "Lease" ? 0 : parseFloat(formData.loan_amount);
-        const rate = formData.loan_type === "Lease" ? 0 : parseFloat(formData.interest_rate);
-        const balance = formData.loan_type === "Lease" ? 0 : parseFloat(formData.remaining_balance);
+        if (
+            !formData.lender_name ||
+            !formData.loan_name ||
+            !formData.loan_amount ||
+            !formData.interest_rate ||
+            !formData.loan_term_years ||
+            !formData.remaining_balance ||
+            !formData.loan_start_month ||
+            !formData.loan_start_year
+        ) {
+            alert("Make sure all required fields are filled before trying to submit the form.");
+            return;
+        }
+
+        const amount = parseFloat(formData.loan_amount);
+        const rate = parseFloat(formData.interest_rate);
+        const balance = parseFloat(formData.remaining_balance);
 
         await onSave({
             ...formData,
@@ -229,7 +239,7 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center p-6 border-b border-gray-100">
                     <h2 className="text-xl font-bold text-gray-900">
-                        {loanToEdit ? "Edit Loan" : "Add New Loan"}
+                        {loanToEdit?.loan_id ? "Edit Loan" : "Add New Loan"}
                     </h2>
                     <button
                         onClick={onClose}
@@ -250,6 +260,7 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
                                 value={formData.lender_name}
                                 onChange={handleChange}
                                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                                required
                             />
                         </div>
                         <div>
@@ -277,8 +288,6 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
                             >
                                 <option value="Term Loan">Term Loan</option>
                                 <option value="Line of Credit">Line of Credit</option>
-                                <option value="Mortgage">Mortgage</option>
-                                <option value="Lease">Lease / Finance Lease</option>
                             </select>
                         </div>
                         <div>
@@ -304,26 +313,35 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Loan Start Date</label>
                         <div className="grid grid-cols-2 gap-4 mt-1">
-                            <select
-                                name="loan_start_month"
-                                value={formData.loan_start_month}
-                                onChange={handleChange}
-                                className="block w-full rounded-md border-gray-300 shadow-sm border p-2"
-                            >
-                                <option value="">Month</option>
-                                {MONTHS.map(m => m.value && <option key={m.value} value={m.value}>{m.label}</option>)}
-                            </select>
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                name="loan_start_year"
-                                value={formData.loan_start_year}
-                                onChange={(e) => {
-                                    const val = onlyDigits(e.target.value).slice(0, 4);
-                                    setFormData(prev => ({ ...prev, loan_start_year: val }));
-                                }}
-                                className="block w-full rounded-md border-gray-300 shadow-sm border p-2"
-                            />
+                            <div>
+                                <select
+                                    name="loan_start_month"
+                                    value={formData.loan_start_month}
+                                    onChange={handleChange}
+                                    className="block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                                    required
+                                >
+                                    <option value="">Select Month</option>
+                                    {MONTHS.map(m => m.value && <option key={m.value} value={m.value}>{m.label}</option>)}
+                                </select>
+                                <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wider ml-1">Month</p>
+                            </div>
+                            <div>
+                                <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    name="loan_start_year"
+                                    placeholder="YYYY"
+                                    value={formData.loan_start_year}
+                                    onChange={(e) => {
+                                        const val = onlyDigits(e.target.value).slice(0, 4);
+                                        setFormData(prev => ({ ...prev, loan_start_year: val }));
+                                    }}
+                                    className="block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                                    required
+                                />
+                                <p className="text-[10px] text-gray-400 mt-1 uppercase tracking-wider ml-1">Year</p>
+                            </div>
                         </div>
                     </div>
 
@@ -341,9 +359,9 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
                                     name="loan_amount"
                                     value={formatNum(formData.loan_amount)}
                                     onChange={handleCurrencyChange}
-                                    disabled={formData.loan_type === "Lease"}
-                                    className={`block w-full rounded-md border-gray-300 pl-7 border p-2 ${formData.loan_type === "Lease" ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}`}
-                                    required={formData.loan_type !== "Lease"}
+                                    disabled={false}
+                                    className={`block w-full rounded-md border-gray-300 pl-7 border p-2`}
+                                    required={true}
                                 />
                             </div>
                         </div>
@@ -359,9 +377,9 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
                                     name="remaining_balance"
                                     value={formatNum(formData.remaining_balance)}
                                     onChange={handleCurrencyChange}
-                                    disabled={formData.loan_type === "Lease"}
-                                    className={`block w-full rounded-md border-gray-300 pl-7 border p-2 ${formData.loan_type === "Lease" ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}`}
-                                    required={formData.loan_type !== "Lease"}
+                                    disabled={false}
+                                    className={`block w-full rounded-md border-gray-300 pl-7 border p-2`}
+                                    required={true}
                                 />
                             </div>
                         </div>
@@ -382,9 +400,9 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
                                         setFormData(prev => ({ ...prev, interest_rate: val }));
                                     }
                                 }}
-                                disabled={formData.loan_type === "Lease"}
-                                className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2 ${formData.loan_type === "Lease" ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""}`}
-                                required={formData.loan_type !== "Lease"}
+                                disabled={false}
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                                required={true}
                             />
                         </div>
                         <div>
@@ -463,7 +481,7 @@ const LoanDrawer = ({ isOpen, onClose, loanToEdit, assets, onSave }: LoanDrawerP
                             type="submit"
                             className="flex-1 bg-dpa-dark-green py-2.5 px-4 border border-transparent rounded-lg text-sm font-medium text-white hover:bg-green-800 focus:outline-none transition-colors shadow-sm"
                         >
-                            {loanToEdit ? "Save Changes" : "Add Loan"}
+                            {loanToEdit?.loan_id ? "Save Changes" : "Add Loan"}
                         </button>
                     </div>
                 </form>

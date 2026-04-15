@@ -15,11 +15,11 @@ const mockAsset = {
     year: "2022",
     fair_market_value: 20000,
     book_value: 15000,
+    purchase_price: 18000,
 };
 
 describe("AssetsCard State Parsing", () => {
     it("correctly parses closeMonth into month and year fields", () => {
-        // Setup the mock to return a specific state
         (useScenario as jest.Mock).mockReturnValue({
             saleDetails: {
                 1: {
@@ -31,7 +31,7 @@ describe("AssetsCard State Parsing", () => {
             updateSaleDetails: jest.fn(),
         });
 
-        render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} />);
+        render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} onEdit={jest.fn()} />);
 
         // Check Month Select (value should be "11")
         const monthSelect = screen.getByRole("combobox") as HTMLSelectElement;
@@ -48,7 +48,7 @@ describe("AssetsCard State Parsing", () => {
             updateSaleDetails: jest.fn(),
         });
 
-        render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} />);
+        render(<AssetsCard asset={mockAsset} onRemove={jest.fn()} onEdit={jest.fn()} />);
 
         const monthSelect = screen.getByRole("combobox") as HTMLSelectElement;
         expect(monthSelect.value).toBe("");

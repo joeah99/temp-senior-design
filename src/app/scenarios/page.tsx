@@ -7,7 +7,6 @@ import Actions from "@/components/actions";
 import LoansPage from "@/components/loans/loans-page";
 import { ChevronRight, ChevronLeft } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect } from "react";
 import { useScenario } from "@/context/ScenarioContext";
 
 export const dynamic = "force-dynamic";

@@ -41,10 +41,7 @@ const SelectAssets = () => {
       const data = await res.json();
 
       const mapped: AssetTypeCard[] = data.map((asset: any) => {
-        const latestFMV =
-          asset.fairMarketValuesOverTime?.[
-            asset.fairMarketValuesOverTime.length - 1
-          ]?.value ?? 0;
+        const latestFMV = asset.FMV ?? 0;
 
         return {
           id: asset.AssetId,

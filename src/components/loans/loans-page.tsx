@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import LoansTable from "./loans-table";
 import LoanDrawer from "./loan-drawer";
 import { LoanInformationDTO } from "@/types/loans";
+import AiLoanUploadModal from "../upload/ai-loan-upload-modal";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -12,6 +13,8 @@ const API_BASE_URL = "http://localhost:8000";
 export interface SimpleAsset {
     id: number | string; // Support composite IDs like "asset-123" or "purchase-456"
     name: string;
+    purchasePrice?: number;
+    fmv?: number; // Primary source for LTV
 }
 
 const LoansPage = () => {
@@ -21,6 +24,7 @@ const LoansPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editingLoan, setEditingLoan] = useState<LoanInformationDTO | null>(null);
+    const [showAiModal, setShowAiModal] = useState(false);
 
     const fetchData = async () => {
         if (!user) return;
@@ -47,7 +51,8 @@ const LoansPage = () => {
                 mappedAssets.push(...rawAssets.map((a: any) => ({
                     id: `asset-${a.AssetId}`, // Composite ID
                     name: `${a.ModelYear} ${a.Manufacturer} ${a.Model}`,
-                    purchasePrice: a.PurchasePrice
+                    purchasePrice: a.PurchasePrice,
+                    fmv: a.FMV ?? 0
                 })));
             } else {
                 console.error("Failed to fetch assets");
@@ -115,7 +120,7 @@ const LoansPage = () => {
             let url = `${API_BASE_URL}/loans`;
             let method = "POST";
 
-            if (editingLoan) {
+            if (editingLoan && editingLoan.loan_id) {
                 url = `${API_BASE_URL}/loans/${editingLoan.loan_id}`;
                 method = "PUT";
             }
@@ -192,13 +197,21 @@ const LoansPage = () => {
                     <p className="text-gray-600 mt-1">Manage your existing debt and financing.</p>
                 </div>
 
-                <button
-                    onClick={openAddDrawer}
-                    className="flex items-center gap-2 bg-dpa-dark-green text-white px-4 py-2 rounded-lg hover:bg-green-800 transition shadow-sm font-medium"
-                >
-                    <Plus size={20} />
-                    Add New Loan
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => setShowAiModal(true)}
+                        className="flex items-center gap-2 bg-green-50 text-dpa-dark-green font-semibold px-4 py-2 rounded-lg hover:bg-green-100 transition shadow-sm border border-green-200"
+                    >
+                        <span>✨</span> Extract via AI
+                    </button>
+                    <button
+                        onClick={openAddDrawer}
+                        className="flex items-center gap-2 bg-dpa-dark-green text-white px-4 py-2 rounded-lg hover:bg-green-800 transition shadow-sm font-medium"
+                    >
+                        <Plus size={20} />
+                        Add New Loan
+                    </button>
+                </div>
             </div>
 
             <LoansTable
@@ -214,6 +227,28 @@ const LoansPage = () => {
                 loanToEdit={editingLoan}
                 assets={assets}
                 onSave={handleSaveLoan}
+            />
+
+            <AiLoanUploadModal
+                isOpen={showAiModal}
+                onClose={() => setShowAiModal(false)}
+                onSave={(data) => {
+                    const draftLoan: any = {
+                        lender_name: data.lender_name || "",
+                        loan_name: data.loan_name || "",
+                        loan_amount: data.loan_amount ? Math.round(data.loan_amount) : "",
+                        interest_rate: data.interest_rate || "",
+                        loan_term_years: data.loan_term_years || "",
+                        loan_start_date: data.loan_start_month && data.loan_start_year ? `${data.loan_start_year}-${data.loan_start_month.padStart(2, '0')}-01` : "",
+                        loan_type: "Term Loan",
+                        payment_frequency: "Monthly",
+                        status: "Active",
+                        remaining_balance: data.loan_amount ? Math.round(data.loan_amount) : "",
+                        monthly_payment: "",
+                    };
+                    setEditingLoan(draftLoan);
+                    setIsDrawerOpen(true);
+                }}
             />
             {/* Delete Confirmation Modal */}
             {isDeleteModalOpen && loanToDelete && (

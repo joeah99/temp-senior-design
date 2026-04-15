@@ -39,30 +39,57 @@ const MONTHS = [
 
 const CreateAssetModal = ({ onSuccess, onClose, initialData }: Props) => {
   const { user } = useAuth();
-  const isEditMode = !!initialData;
+  const isEditMode = !!initialData?.AssetId; // Only edit mode if it already has a DB ID
+
+  // Format initial numbers if needed
+  const formatInitialNumber = (num?: number | string) => {
+    if (num === null || num === undefined) return "";
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  };
 
   // Initialize state with initialData if available
-  // Initialize state (No pre-fill, as requested)
-  const [type, setType] = useState<string>("Equipment");
-  const [manufacturer, setManufacturer] = useState<string>("");
-  const [model, setModel] = useState<string>("");
-  const [modelYear, setModelYear] = useState<string>("");
+  const [type, setType] = useState<string>(initialData?.Type || "Equipment");
+  const [manufacturer, setManufacturer] = useState<string>(initialData?.Manufacturer || "");
+  const [model, setModel] = useState<string>(initialData?.Model || "");
+  const [modelYear, setModelYear] = useState<string>(initialData?.ModelYear?.toString() || "");
 
-  const [purchasePrice, setPurchasePrice] = useState<string>("");
+  const [purchasePrice, setPurchasePrice] = useState<string>(
+    formatInitialNumber(initialData?.PurchasePrice)
+  );
 
-  const [bookValue, setBookValue] = useState<string>("");
+  const [bookValue, setBookValue] = useState<string>(
+    formatInitialNumber(initialData?.BookValue)
+  );
 
-  const [usefulLife, setUsefulLife] = useState<string>("7");
+  const [fmv, setFmv] = useState<string>(
+    formatInitialNumber(initialData?.FMV || "0")
+  );
 
-  const [purchaseMonth, setPurchaseMonth] = useState<string>("");
-  const [purchaseYear, setPurchaseYear] = useState<string>("");
+  const [usefulLife, setUsefulLife] = useState<string>(
+    initialData?.UsefulLife ? initialData.UsefulLife.toString() : "10"
+  );
 
-  const [usage, setUsage] = useState<string>("");
+  const [purchaseMonth, setPurchaseMonth] = useState<string>(() => {
+    if (initialData?.PurchaseDate) {
+      return initialData.PurchaseDate.split("-")[1];
+    }
+    return "";
+  });
+  const [purchaseYear, setPurchaseYear] = useState<string>(() => {
+    if (initialData?.PurchaseDate) {
+      return initialData.PurchaseDate.split("-")[0];
+    }
+    return "";
+  });
+
+  const [usage, setUsage] = useState<string>(
+    formatInitialNumber(initialData?.Usage)
+  );
   const [usageUnit, setUsageUnit] = useState<string>("hours");
 
-  const [condition, setCondition] = useState<string>("");
-  const [country, setCountry] = useState<string>("United States");
-  const [zipCode, setZipCode] = useState<string>("");
+  const [condition, setCondition] = useState<string>(initialData?.Condition || "");
+  const [country, setCountry] = useState<string>(initialData?.Country || "United States");
+  const [zipCode, setZipCode] = useState<string>(initialData?.ZipCode || "");
 
   // Prevent auto-calc from overwriting initial BookValue on first render
   const isInitialMount = React.useRef(true);
@@ -73,6 +100,7 @@ const CreateAssetModal = ({ onSuccess, onClose, initialData }: Props) => {
   // const usefulLife = MACRS_LIFETIMES[type] || 7; // NOW USER INPUT
 
   const [loading, setLoading] = useState(false);
+  const [isEstimating, setIsEstimating] = useState(false);
   const [error, setError] = useState<string>("");
 
   // Format number with commas
@@ -144,6 +172,44 @@ const CreateAssetModal = ({ onSuccess, onClose, initialData }: Props) => {
 
   }, [purchasePrice, purchaseMonth, purchaseYear, usefulLife]);
 
+  const handleEstimateAI = async () => {
+    if (!type || !manufacturer || !model || !modelYear || !condition || !purchasePrice) {
+       setError("Please fill out basic info (Type, Manufacturer, Model, Year, Condition, Purchase Price) before estimating FMV.");
+       return;
+    }
+    
+    setIsEstimating(true);
+    setError("");
+    try {
+      const api = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const payload = {
+        asset_id: isEditMode ? initialData.AssetId : 0,
+        asset_type: type,
+        manufacturer: manufacturer,
+        model: model,
+        model_year: modelYear,
+        usage: Number(usage.replace(/,/g, "")) || 0,
+        usage_unit: usageUnit,
+        condition: condition,
+        purchase_price: Number(purchasePrice.replace(/,/g, "")) || 0
+      };
+      
+      const res = await fetch(`${api}/valuation/estimate-fmv`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Failed to get response from AI");
+      const data = await res.json();
+      setFmv(formatNumberWithCommas(data.estimated_fmv.toString()));
+    } catch (err: any) {
+      setError(err.message || "Failed to estimate FMV.");
+    } finally {
+      setIsEstimating(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -159,6 +225,7 @@ const CreateAssetModal = ({ onSuccess, onClose, initialData }: Props) => {
       !modelYear ||
       !purchasePrice ||
       !bookValue ||
+      !fmv ||
       !usefulLife ||
       !purchaseMonth ||
       !purchaseYear ||
@@ -195,6 +262,7 @@ const CreateAssetModal = ({ onSuccess, onClose, initialData }: Props) => {
         State: "", // Hardcoded empty as removed from UI
         DepreciationMethod: depreciationMethod,
         UsefulLife: Number(usefulLife),
+        FMV: Number(fmv.replace(/,/g, "")) || 0,
         fairMarketValuesOverTime: [],
         assetDepreciationSchedule: [],
       };
@@ -402,10 +470,10 @@ const CreateAssetModal = ({ onSuccess, onClose, initialData }: Props) => {
             </div>
           </div>
 
-          {/* Tax Basis */}
+          {/* Tax Basis & Market Value*/}
           <div className="mb-6">
             <h4 className="font-semibold text-lg mb-3 text-gray-700">Financials</h4>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">
                   Useful Life (Years) *
@@ -439,8 +507,38 @@ const CreateAssetModal = ({ onSuccess, onClose, initialData }: Props) => {
                   required
                 />
                 <p className="text-sm text-blue-600 mt-1 flex items-center gap-1">
-                  <span>✨</span> Auto-calculated with straight-line depreciation (editable).
+                  <span>✨</span> Auto-calculated with straight-line depreciation.
                 </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-sm font-medium">
+                    Fair Market Value *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleEstimateAI}
+                    disabled={isEstimating}
+                    className="text-xs text-dpa-dark-green font-semibold hover:text-green-700 flex items-center gap-1 bg-green-50 px-2 py-0.5 rounded-md border border-green-200 transition-colors"
+                  >
+                    {isEstimating ? "Loading..." : "✨ AI Estimate"}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={11} 
+                  value={fmv}
+                  onChange={(e) => {
+                    const cleaned = e.target.value.replace(/[^0-9]/g, "");
+                    if (Number(cleaned) > 999999999) return;
+                    setFmv(formatNumberWithCommas(e.target.value));
+                  }}
+                  className={`w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-green-500 transition-all ${isEstimating ? "bg-green-50 animate-pulse text-green-700 font-bold" : ""}`}
+                  placeholder="0"
+                  required
+                />
               </div>
             </div>
           </div>
